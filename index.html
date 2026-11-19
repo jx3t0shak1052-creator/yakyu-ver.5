@@ -3112,6 +3112,16 @@ nav.tabs button.tab-btn.tm-tab{ background:rgba(255,255,255,0.035); }
 .tm-subtabs{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
 .tm-subtabs button{ flex:1 1 0; min-width:70px; background:var(--navy); border:1px solid var(--navy-3); color:var(--text-secondary); border-radius:9px; padding:9px 6px; font-size:14px; cursor:pointer; font-family:inherit; }
 .tm-subtabs button.on{ background:rgba(224,168,62,.15); border-color:var(--mustard); color:var(--chalk); font-weight:700; }
+#tm-sub-recruit .tm-recruit-head{ justify-content:space-between; }
+#tm-sub-recruit .tm-recruit-head h3{ margin:0; }
+#tm-sub-recruit .tm-recruit-list{ list-style:none; padding:0; margin:10px 0 0; }
+#tm-sub-recruit .tm-recruit-item{ display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; border-inline-start:3px solid var(--mustard); }
+#tm-sub-recruit .tm-recruit-label{ flex:1 1 180px; min-width:0; overflow-wrap:anywhere; }
+#tm-sub-recruit .tm-recruit-name{ display:block; color:var(--chalk); font-size:15px; }
+#tm-sub-recruit .tm-recruit-note{ white-space:pre-wrap; }
+#tm-recruit-inbox{ scroll-margin-top:115px; }
+#tm-sub-recruit .tm-btn:focus-visible{ outline:2px solid var(--mustard); outline-offset:3px; }
+#tm-subtabs [data-sub="recruit"][hidden], #tm-sub-recruit [hidden], #tm-sub-recruit[hidden]{ display:none !important; }
 .tm-sub{ display:none; } .tm-sub.on{ display:block; }
 .tm-table-wrap{ overflow-x:auto; }
 .tm-table{ width:100%; border-collapse:collapse; font-size:13px; }
@@ -3904,6 +3914,7 @@ a.tm-map:hover, a.tm-map:active{ text-decoration:underline; }
           <button type="button" data-sub="fees" class="on tm-admin-only">💴 集金</button>
           <button type="button" data-sub="gear">🧰 道具</button>
           <button type="button" data-sub="grounds" class="tm-admin-only">🏟 グラウンド</button>
+          <button type="button" data-sub="recruit" hidden><span aria-hidden="true">📋</span> 募集掲示板</button>
           <button type="button" data-sub="stats">📊 チーム成績</button>
           <button type="button" data-sub="titles">🏆 年間タイトル</button>
           <button type="button" data-sub="share">🔄 共有</button>
@@ -3949,6 +3960,24 @@ a.tm-map:hover, a.tm-map:active{ text-decoration:underline; }
             <button type="button" class="tm-btn line" id="tm-gear-line">LINEで持ち物一覧を送る</button>
             <button type="button" class="tm-btn" id="tm-gear-copy">持ち物一覧をコピー</button>
           </div>
+        </div>
+
+        <div class="tm-sub" id="tm-sub-recruit" hidden>
+          <div class="tm-row tm-recruit-head">
+            <h3 class="tm-h3"><span aria-hidden="true">📋</span>募集掲示板</h3>
+            <button type="button" class="tm-btn pri" id="tm-recruit-add" hidden>＋ リンクを追加</button>
+          </div>
+          <p class="tm-note">草野球の募集サイトを別のタブで開きます。募集への応募や投稿は各サイトで行ってください。</p>
+          <ul class="tm-recruit-list" id="tm-recruit-list"></ul>
+          <p class="tm-note" id="tm-recruit-empty" hidden>登録されているリンクはありません。</p>
+          <div class="tm-row tm-recruit-head" id="tm-recruit-inbox" style="margin-top:20px">
+            <h3 class="tm-h3">応募・問い合わせの対応</h3>
+            <button type="button" class="tm-btn" id="tm-recruit-react">＋ 反応を記録</button>
+          </div>
+          <p class="tm-note">外部サイトで届いた反応は、「反応を記録」から手動で登録します。外部サイトからの自動受信には対応していません。</p>
+          <ul class="tm-recruit-list" id="tm-recruit-reactions"></ul>
+          <p class="tm-note" id="tm-recruit-caught-up" hidden>未対応の反応はありません。</p>
+          <p class="tm-note">リンクと対応状況は、この端末のブラウザーにチームごとに保存され、ほかの端末には同期されません。</p>
         </div>
 
         <!-- 年間タイトル -->
@@ -4816,6 +4845,7 @@ function writeReadable_(st) {
     { id:'fee',     label:'集金の未払い',                  desc:'管理者：期限が近い・過ぎた集金に未払いの人がいる／メンバー：自分が未払いの集金', roles:['admin','member'], def:{ admin:true, member:true } },
     { id:'next',    label:'次の予定',                      desc:'ほかにお知らせがないときに、次の予定と出欠の状況を表示', roles:['admin','member'], def:{ admin:true, member:false } },
     { id:'grounds', label:'グラウンド予約',                desc:'抽選の申込期間・申込締切・結果発表日・当選確定・支払期限', roles:['admin'], def:{ admin:true } },
+    { id:'recruit', label:'募集掲示板の未対応',             desc:'記録した応募・問い合わせのポップアップと、対応済みまでのお知らせ', roles:['admin'], def:{ admin:true } },
     { id:'safety',  label:'データの保護',                  desc:'バックアップのおすすめ・ホーム画面への追加の案内', roles:['admin','member'], def:{ admin:true, member:false } },
     { id:'system',  label:'連携・アプリの更新',            desc:'スプレッドシートのスクリプト更新が必要なときなど', roles:['admin'], def:{ admin:true } }
   ];
@@ -16235,8 +16265,8 @@ var YSteal = (function(){
   }
   var db = loadDb();
   function save(){
-    try{ YStore.setItem(KEY, JSON.stringify(db)); }
-    catch(e){ toast('保存に失敗しました（ブラウザの設定をご確認ください）'); }
+    try{ YStore.setItem(KEY, JSON.stringify(db)); return true; }
+    catch(e){ toast('保存に失敗しました（ブラウザの設定をご確認ください）'); return false; }
   }
   function ownTeamId(){ var st = S(); return (st && st.currentTeamId) || 'default'; }
   /* 参加中のチーム（メンバー・追加の管理者）は、スプレッドシートごとに1枠ずつ持つ */
@@ -19373,6 +19403,10 @@ var YSteal = (function(){
     }
     /* グラウンド予約など（管理者） */
     if(!member) YHooks.reduce('tm:banner', []).forEach(function(h){ add('grounds', h); });
+    if(canEditRecruit(T())){
+      var reactions = pendingRecruit(T());
+      if(reactions.length) add('recruit', '<div class="tm-alert"><span><b>募集掲示板に未対応の反応</b>：' + reactions.length + '件</span><span class="tm-sp"></span><button type="button" class="tm-btn sm" data-goto-recruit>確認</button></div>');
+    }
     /* 次の予定（ほかにお知らせがないとき） */
     var visible = items.filter(function(it){ return YNotify.allowed(it.cat); });
     var next = sortedEvents().filter(function(e){ return !isPast(e); })[0];
@@ -19466,8 +19500,9 @@ var YSteal = (function(){
   window.tmMy = { data:myData, setMe:setMyIdentity, askMe:function(){ maybeAskMe(true); }, openEvent:function(id){ var tab = document.querySelector('.tab-btn[data-tab="schedule"]'); if(tab) tab.click(); setTimeout(function(){ openEventDetail(id); }, 80); }, yen:yen, md:md };
   YHooks.on('notify:changed', function(){ renderBanner(); try{ if(window.YSafety) YSafety.renderBanners(); }catch(e){} });
   document.addEventListener('click', function(e){
-    var t = e.target.closest && e.target.closest('[data-notify-settings], [data-goto-fees]'); if(!t) return;
+    var t = e.target.closest && e.target.closest('[data-notify-settings], [data-goto-fees], [data-goto-recruit]'); if(!t) return;
     if(t.hasAttribute('data-notify-settings')){ notifySettings(); return; }
+    if(t.hasAttribute('data-goto-recruit')){ gotoRecruit(); return; }
     var tab = document.querySelector('.tab-btn[data-tab="ops"]'); if(tab) tab.click();
     var sb = document.querySelector('#tm-subtabs button[data-sub="fees"]'); if(sb) sb.click();
   });
@@ -19485,6 +19520,126 @@ var YSteal = (function(){
     }catch(e){}
   }
 
+  /* ================= 募集掲示板 ================= */
+  var RECRUIT_DEFAULTS = [
+    { id:'locker-room', name:'ロッカールーム', url:'http://www.locker-room.info/tokai?prefecture=%E9%9D%99%E5%B2%A1%E7%9C%8C', note:'東海エリアのチーム検索（静岡県）' },
+    { id:'net-menber', name:'スポーツやろうよ！', url:'https://www.net-menber.com/list/bass/index.html?ken=23&p=3', note:'静岡の草野球メンバー募集一覧' },
+    { id:'labola', name:'LaBOLA', url:'https://community.labola.jp/community/search?sport=baseball&page=1&area=shizuoka#google_vignette', note:'静岡の野球コミュニティ検索' }
+  ];
+  function recruitLinks(t){ return Array.isArray(t.recruitLinks) ? t.recruitLinks : RECRUIT_DEFAULTS; }
+  function canEditRecruit(t){ return t === T() && t.settings.role !== 'member' && isAdminDevice(); }
+  function pendingRecruit(t){ return Array.isArray(t.recruitPending) ? t.recruitPending : []; }
+  function gotoRecruit(){
+    if(!canEditRecruit(T())) return;
+    var tab = document.querySelector('.tab-btn[data-tab="ops"]'); if(tab) tab.click();
+    var sub = document.querySelector('#tm-subtabs [data-sub="recruit"]'); if(sub) sub.click();
+    $('tm-recruit-inbox').scrollIntoView({block:'start'});
+  }
+  function applyRecruitVisibility(){
+    var admin = canEditRecruit(T()), panel = $('tm-sub-recruit');
+    var btn = document.querySelector('#tm-subtabs [data-sub="recruit"]');
+    btn.hidden = panel.hidden = !admin;
+    if(admin) return;
+    $('tm-recruit-list').replaceChildren();
+    $('tm-recruit-reactions').replaceChildren();
+    if(panel.classList.contains('on')){
+      panel.classList.remove('on'); btn.classList.remove('on');
+      $('tm-sub-stats').classList.add('on');
+      document.querySelector('#tm-subtabs [data-sub="stats"]').classList.add('on');
+    }
+    if(overlay && overlay.classList.contains('open') && overlay.querySelector('[data-recruit-admin-dialog]')){
+      overlay.querySelector('.tm-modal-body').replaceChildren();
+      overlay.classList.remove('open'); document.body.style.overflow = '';
+    }
+  }
+  function recruitUrl(value){
+    var s = String(value || '').trim();
+    if(!/^https?:\/\//i.test(s) || /[\s\\]/.test(s)) return null;
+    try{ var u = new URL(s); return u.hostname && !u.username && !u.password ? u : null; }catch(e){ return null; }
+  }
+  function renderRecruit(){
+    var t = T(); if(!canEditRecruit(t)) return;
+    var links = recruitLinks(t), pending = pendingRecruit(t);
+    $('tm-recruit-add').hidden = false;
+    $('tm-recruit-list').innerHTML = links.map(function(item){
+      if(!item) return '';
+      var u = recruitUrl(item.url);
+      return '<li class="tm-box tm-recruit-item"><div class="tm-recruit-label"><strong class="tm-recruit-name">' + esc(item.name) + '</strong>' +
+        (u ? '<div class="tm-note">' + esc(u.hostname) + '</div>' : '') +
+        (item.note ? '<div class="tm-note tm-recruit-note">' + esc(item.note) + '</div>' : '') + '</div><div class="tm-row">' +
+        (u ? '<a class="tm-btn" target="_blank" rel="noopener noreferrer" href="' + esc(u.href) + '" aria-label="' + esc(item.name) + 'を別のタブで開く">サイトを開く ↗</a>' : '') +
+        '<button type="button" class="tm-btn" data-recruit-edit="' + esc(item.id) + '" aria-label="' + esc(item.name) + 'を編集">編集</button></div></li>';
+    }).join('');
+    $('tm-recruit-empty').hidden = !!links.length;
+    $('tm-recruit-caught-up').hidden = !!pending.length;
+    $('tm-recruit-reactions').innerHTML = pending.map(function(r){
+      return '<li class="tm-box tm-recruit-item"><div class="tm-recruit-label"><strong class="tm-recruit-name">' + esc(r.source) + '</strong><div class="tm-note tm-recruit-note">' + esc(r.note) + '</div></div>' +
+        '<button type="button" class="tm-btn" data-recruit-done="' + esc(r.id) + '">対応済みにする</button></li>';
+    }).join('');
+  }
+  function writeRecruit(t, key, value){
+    if(!canEditRecruit(t)){ toast('募集掲示板を編集できるのは、表示中のチームの管理者だけです'); return false; }
+    var before = t[key];
+    t[key] = value;
+    if(save()) return true;
+    if(before === undefined) delete t[key]; else t[key] = before;
+    return false;
+  }
+  function openRecruitReaction(){
+    var t = T(); if(!canEditRecruit(t)) return;
+    var sources = recruitLinks(t).filter(function(x){ return x && x.name; });
+    modal('募集への反応を記録', '<form id="tm-recruit-reaction-form" data-recruit-admin-dialog>' +
+      '<label class="tm-field"><span>反応が届いたサイト</span><select class="tm-in" name="source">' +
+      sources.map(function(x){ return '<option>' + esc(x.name) + '</option>'; }).join('') + '<option>その他</option></select></label>' +
+      '<label class="tm-field" style="margin-top:8px"><span>対応メモ（任意）</span><textarea class="tm-in" name="note" rows="3" maxlength="300" placeholder="例：体験参加について問い合わせあり"></textarea></label>' +
+      '<button type="submit" class="tm-btn pri" style="margin-top:12px">未対応として記録</button></form>', function(body){
+      var form = body.querySelector('form');
+      form.onsubmit = function(e){
+        e.preventDefault();
+        if(!overlay.classList.contains('open') || !form.isConnected || !canEditRecruit(t)) return;
+        var source = form.elements.source.value, note = form.elements.note.value.trim();
+        if(!writeRecruit(t, 'recruitPending', [{id:nid('reaction-'), source:source, note:note}].concat(pendingRecruit(t)))) return;
+        closeModal();
+        if(!YNotify.allowed('recruit')) return;
+        modal('募集に新しい反応があります', '<div data-recruit-admin-dialog><p class="tm-note">' + esc(source) + 'からの反応を未対応として記録しました。対応済みにするまで画面上部のお知らせに表示します。</p><button type="button" class="tm-btn pri" data-recruit-review>未対応の反応を確認</button></div>', function(p){
+          p.querySelector('[data-recruit-review]').onclick = function(){ closeModal(); gotoRecruit(); };
+        });
+      };
+    });
+  }
+  function openRecruitEditor(id){
+    var t = T();
+    if(!canEditRecruit(t)) return;
+    var item = id === null ? null : recruitLinks(t).find(function(s){ return s && s.id === id; });
+    if(id !== null && !item) return;
+    modal(item ? '募集リンクを編集' : '募集リンクを追加',
+      '<form id="tm-recruit-form" data-recruit-admin-dialog>' +
+      '<label class="tm-field"><span>表示名</span><input name="linkName" class="tm-in" required maxlength="80" value="' + esc(item && item.name) + '"></label>' +
+      '<label class="tm-field" style="margin-top:8px"><span>ページのURL</span><input name="linkUrl" class="tm-in" type="url" required maxlength="2048" placeholder="https://" value="' + esc(item && item.url) + '"></label>' +
+      '<label class="tm-field" style="margin-top:8px"><span>メモ（任意・閲覧者にも表示）</span><textarea name="linkNote" class="tm-in" rows="3" maxlength="300">' + esc(item && item.note) + '</textarea></label>' +
+      '<div class="tm-note" role="alert" data-recruit-error></div>' +
+      '<div class="tm-row" style="margin-top:12px"><button type="submit" class="tm-btn pri">保存</button>' +
+      (item ? '<button type="button" class="tm-btn danger" data-recruit-delete>削除</button>' : '') + '</div></form>', function(body){
+      var form = body.querySelector('form'), msg = body.querySelector('[data-recruit-error]');
+      form.onsubmit = function(e){
+        e.preventDefault();
+        if(!overlay.classList.contains('open') || !form.isConnected || !canEditRecruit(t)) return;
+        var name = form.elements.linkName.value.trim(), url = recruitUrl(form.elements.linkUrl.value);
+        if(!name || !url){ msg.textContent = '表示名と、http:// または https:// で始まる有効なURLを入力してください。'; return; }
+        var next = { id:item ? item.id : nid('recruit-'), name:name, url:url.href, note:form.elements.linkNote.value.trim() };
+        var links = recruitLinks(t);
+        if(writeRecruit(t, 'recruitLinks', item ? links.map(function(s){ return s && s.id === item.id ? next : s; }) : links.concat(next))){ closeModal(); toast('募集リンクを保存しました'); }
+      };
+      var del = body.querySelector('[data-recruit-delete]');
+      if(del) del.onclick = function(){
+        if(!canEditRecruit(t)) return;
+        if(!confirm('「' + item.name + '」を募集掲示板から削除しますか？')) return;
+        if(writeRecruit(t, 'recruitLinks', recruitLinks(t).filter(function(s){ return !s || s.id !== item.id; }))){ closeModal(); toast('募集リンクを削除しました'); }
+      };
+      form.elements.linkName.focus();
+    });
+  }
+
   /* ================= 描画・イベント ================= */
   /* 再描画で、入力途中の文字が消えないようにする */
   function keepInputs(fn){
@@ -19500,12 +19655,14 @@ var YSteal = (function(){
   function renderAll(){ keepInputs(renderAll0); }
   function renderAll0(){
     document.body.classList.toggle('tm-member', isMember());
+    applyRecruitVisibility();
     try{ renderBanner(); }catch(e){ console.error(e); }
     var active = document.querySelector('.tab-btn.active');
     var tab = active ? active.dataset.tab : '';
     try{
       if(tab === 'schedule'){ renderViewSwitch(); renderSyncStatus(); renderCalendar(); renderLists(); }
       if(tab === 'ops'){
+        if($('tm-sub-recruit').classList.contains('on')) renderRecruit();
         if(isMember()){ var onb = document.querySelector('#tm-subtabs button.on'); if(onb && (onb.dataset.sub === 'fees' || onb.dataset.sub === 'grounds')){ document.querySelectorAll('#tm-subtabs button').forEach(function(x){ x.classList.toggle('on', x.dataset.sub === 'stats'); }); document.querySelectorAll('.tm-sub').forEach(function(x){ x.classList.toggle('on', x.id === 'tm-sub-stats'); }); } }
         renderViewSwitch(); renderFees(); renderGear(); renderStats(); renderTitles(); renderPublicUrl(); renderSyncSettings(); renderHandover();
         YHooks.run('tm:renderOps');
@@ -19514,6 +19671,16 @@ var YSteal = (function(){
   }
 
   function bind(){
+    $('tm-recruit-add').onclick = function(){ openRecruitEditor(null); };
+    $('tm-recruit-react').onclick = openRecruitReaction;
+    $('tm-recruit-reactions').addEventListener('click', function(e){
+      var b = e.target.closest('[data-recruit-done]'), t = T(); if(!b || !canEditRecruit(t)) return;
+      if(writeRecruit(t, 'recruitPending', pendingRecruit(t).filter(function(x){ return x.id !== b.dataset.recruitDone; }))) renderAll();
+    });
+    $('tm-recruit-list').addEventListener('click', function(e){
+      var edit = e.target.closest('[data-recruit-edit]');
+      if(edit) openRecruitEditor(edit.dataset.recruitEdit);
+    });
     document.querySelectorAll('.tab-btn').forEach(function(b){ b.addEventListener('click', function(){
       setTimeout(renderAll, 0);
       if((b.dataset.tab === 'schedule' || b.dataset.tab === 'ops') && syncUrl() && Date.now() - syncState.lastPullStart > 15000) setTimeout(function(){ pull(true); }, 50);
@@ -19603,6 +19770,7 @@ var YSteal = (function(){
       /* 運営サブタブ */
       var sub = t.closest('#tm-subtabs button');
       if(sub){
+        if(sub.dataset.sub === 'recruit' && !canEditRecruit(T())) return;
         document.querySelectorAll('#tm-subtabs button').forEach(function(x){ x.classList.toggle('on', x === sub); });
         document.querySelectorAll('.tm-sub').forEach(function(x){ x.classList.toggle('on', x.id === 'tm-sub-' + sub.dataset.sub); });
         renderAll(); return;
