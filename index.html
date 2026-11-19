@@ -21067,6 +21067,33 @@ var YSteal = (function(){
     if(r.category === 'out' && (r.outType === 'strikeout' || r.outType === 'swing')) return 3 + Math.floor(rnd() * 4);
     return 1 + Math.floor(rnd() * 5);
   }
+  /* 最後の1球は打席結果に含まれる。f は2ストライク後のファウルだけ。 */
+  function sampleCount(r, variant){
+    var walk = r.category === 'bb';
+    var strikeout = r.category === 'out' && (r.outType === 'strikeout' || r.outType === 'swing');
+    var min = walk ? 4 : strikeout ? 3 : 1;
+    if(!Number.isInteger(r.pitches) || r.pitches < min) return false;
+    var choices = [];
+    for(var s = strikeout ? 2 : 0; s <= 2; s++){
+      for(var b = walk ? 3 : 0; b <= 3; b++){
+        var f = r.pitches - 1 - b - s;
+        if(f < 0 || (f > 0 && s < 2)) continue;
+        /* 同じ球数なら、2ストライク後のファウルが少ないカウントを多めにする。 */
+        var weight = f === 0 ? 6 : f === 1 ? 3 : 1;
+        while(weight-- > 0) choices.push({b:b,s:s,f:f});
+      }
+    }
+    if(!choices.length) return false;
+    r.bso = choices[variant % choices.length];
+    return true;
+  }
+  function fillSampleCounts(){
+    var n = 0, changed = false;
+    [state.batting, state.opponentBatting].forEach(function(side){
+      eachRec(side, function(r){ var v = n++; if(!r.bso && sampleCount(r, (v * 17 + Math.floor(v / 3) * 7))){ changed = true; } });
+    });
+    return changed;
+  }
   function eachRec(batting, fn){
     Object.keys(batting || {}).forEach(function(i){
       (Array.isArray(batting[i]) ? batting[i] : [batting[i]]).forEach(function(lap, li){
@@ -21095,6 +21122,8 @@ var YSteal = (function(){
     state.pitchMode = 'bso'; state.pitchPending = {};
     eachRec(state.batting, function(r){ r.pitches = pitchesFor(r); });
     eachRec(state.opponentBatting, function(r){ r.pitches = pitchesFor(r); });
+    fillSampleCounts();
+    state.gameInfo.sampleBsoVersion = 1;
     /* 相手チームの守備位置・投手 */
     state.oppDefOn = true;
     var od = { P:2, C:1, '1B':4, '2B':6, '3B':5, SS:0, LF:7, CF:3, RF:8 };
@@ -21242,7 +21271,15 @@ var YSteal = (function(){
   /* 「チーム」欄の削除ボタンでサンプルを消したときも後片付けする */
   YHooks.on('team:deleted', function(t){ if(t && (t.id === SAMPLE_ID || t.sample)) cleanup(); });
 
-  function switchToSample(){ var t = sampleTeam(); if(t) window.v11SwitchTeam(t.id, { silent:true }); rerender(); }
+  function upgradeSampleCounts(){
+    var g = state.gameInfo;
+    if(!isSampleCurrent() || !g || !g.sample || g.sampleBsoVersion || state.pitchMode !== 'bso') return;
+    if(!fillSampleCounts()) return;
+    g.sampleBsoVersion = 1;
+    saveState();
+    try{ if(typeof YSteal !== 'undefined') YSteal.renderBar(); }catch(e){}
+  }
+  function switchToSample(){ var t = sampleTeam(); if(t) window.v11SwitchTeam(t.id, { silent:true }); upgradeSampleCounts(); rerender(); }
   function switchToOwn(){
     var own = (state.teams || []).filter(function(x){ return !(x.id === SAMPLE_ID || x.sample); })[0];
     if(own) window.v11SwitchTeam(own.id); rerender();
@@ -21267,7 +21304,7 @@ var YSteal = (function(){
     if(isSampleCurrent()){
       var hasOwn = (state.teams || []).some(function(x){ return !(x.id === SAMPLE_ID || x.sample); });
       bar.innerHTML = '<div class="yk-banner yk-sample"><div class="yk-banner-text">🧪 <b>サンプルチームを表示中です。</b>選手名簿・打順・守備位置・試合中の成績・通算成績（打球の散布図）・日程・集金・道具まで、自由に触って試せます。' +
-        '<div class="yk-sample-tips">今日の試合の見どころ：相手チームの打撃成績（詳細入力）／BSOボタンの投球数／4回の守備交代（🧤遊→吉田・この回だけ）と相手の投手交代（🧤投→中島）／5回途中の投手交代（⚾→加藤）／守備成績・投手成績の自動集計</div></div>' +
+        '<div class="yk-sample-tips">今日の試合の見どころ：相手チームの打撃成績（詳細入力）／入力済みの打席を選ぶと、最後の1球を投げる前のB・S、その時点のアウト数、最後の1球を含む球数を確認できます／4回の守備交代（🧤遊→吉田・この回だけ）と相手の投手交代（🧤投→中島）／5回途中の投手交代（⚾→加藤）／守備成績・投手成績の自動集計</div></div>' +
         '<div class="yk-banner-btns">' + (hasOwn ? '<button type="button" class="yk-banner-go" id="yk-sample-own">自分のチームへ</button>' : '') +
         '<button type="button" class="yk-banner-x yk-sample-del" id="yk-sample-del">サンプルを削除</button></div></div>';
       $('yk-sample-del').onclick = remove;
@@ -21287,7 +21324,7 @@ var YSteal = (function(){
     }
   }
   var lastTeam = null;
-  setInterval(function(){ if(state.currentTeamId !== lastTeam){ lastTeam = state.currentTeamId; renderUi(); } }, 700);
+  setInterval(function(){ if(state.currentTeamId !== lastTeam){ lastTeam = state.currentTeamId; upgradeSampleCounts(); renderUi(); } }, 700);
 
   /* ---------- 初めて開いたときは、自動でサンプルを用意 ---------- */
   function firstRun(){
@@ -21301,7 +21338,7 @@ var YSteal = (function(){
     create({ auto:true });
     return true;
   }
-  setTimeout(function(){ if(!firstRun()) renderUi(); }, 300);
+  setTimeout(function(){ if(!firstRun()){ upgradeSampleCounts(); renderUi(); } }, 300);
 
   window.YSample = { create:create, remove:remove, exists:function(){ return !!sampleTeam(); }, isCurrent:isSampleCurrent };
 })();
@@ -21770,5 +21807,6 @@ var YSteal = (function(){
   });
 })();
 </script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
